@@ -188,8 +188,8 @@ void t265LocalizerThread::run()
     }
     else
     {
-        m_current_device_data.x = pose_data.translation.z;
-        m_current_device_data.y = pose_data.translation.x;
+        m_current_device_data.x = -pose_data.translation.z;
+        m_current_device_data.y = -pose_data.translation.x;
         yarp::math::Quaternion q (pose_data.rotation.x, pose_data.rotation.y, pose_data.rotation.z, pose_data.rotation.w);
         auto m = q.toRotationMatrix3x3();
         auto v = yarp::math::dcm2euler(m);
