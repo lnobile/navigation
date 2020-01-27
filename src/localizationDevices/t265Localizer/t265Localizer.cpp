@@ -397,7 +397,7 @@ bool t265LocalizerThread::threadInit()
     }
 
     //the odometry port
-    if (m_odometry_handler)
+    if (m_odometry_handler==nullptr)
     {
         m_odometry_handler = new odometry_handler(m_realsense_pipe.get_active_profile().get_device());
         m_odometry_handler->useCallback();  // input should go to onRead() callback

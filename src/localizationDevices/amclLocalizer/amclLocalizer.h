@@ -1,27 +1,15 @@
 /*
- * Copyright (C)2018  ICub Facility - Istituto Italiano di Tecnologia
- * Author: Marco Randazzo
- * email:  marco.randazzo@iit.it
- * website: www.robotcub.org
- * Permission is granted to copy, distribute, and/or modify this program
- * under the terms of the GNU General Public License, version 2 or any
- * later version published by the Free Software Foundation.
- *
- * A copy of the license can be found at
- * http://www.robotcub.org/icub/license/gpl.txt
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
- * Public License for more details
- */
+•   Copyright (C) 2020 Istituto Italiano di Tecnologia (IIT)
+•   All rights reserved.
+•
+•   This software may be modified and distributed under the terms of the
+•   GPL-2+ license. See the accompanying LICENSE file for details.
+*/
 
 #include <yarp/os/Network.h>
 #include <yarp/os/RFModule.h>
 #include <yarp/os/Time.h>
 #include <yarp/os/Port.h>
-#include <yarp/os/Mutex.h>
-#include <yarp/os/LockGuard.h>
 #include <yarp/os/LogStream.h>
 #include <yarp/os/Node.h>
 #include <yarp/dev/PolyDriver.h>
@@ -71,7 +59,7 @@ public:
 };
 
 class amclLocalizer : public yarp::dev::DeviceDriver,
-                     public yarp::dev::ILocalization2D
+                     public yarp::dev::Nav2D::ILocalization2D
 {
 public:
     amclLocalizerThread*    thread;
@@ -87,31 +75,17 @@ public:
     virtual bool close() override;
 
 public:
-    /**
-    * Gets the current status of the localization task.
-    * @return true/false
-    */
-    bool   getLocalizationStatus(yarp::dev::LocalizationStatusEnum& status) override;
 
-    /**
-    * Gets a set of pose estimates computed by the localization algorithm.
-    * @return true/false
-    */
-    bool   getEstimatedPoses(std::vector<yarp::dev::Map2DLocation>& poses) override;
+    bool   getLocalizationStatus(yarp::dev::Nav2D::LocalizationStatusEnum& status) override;
+    bool   getEstimatedPoses(std::vector<yarp::dev::Nav2D::Map2DLocation>& poses) override;
+    bool   getCurrentPosition(yarp::dev::Nav2D::Map2DLocation& loc) override;
+    bool   getCurrentPosition(yarp::dev::Nav2D::Map2DLocation& loc, yarp::sig::Matrix& cov) override;
+    bool   getEstimatedOdometry(yarp::dev::OdometryData& odom) override;
+    bool   setInitialPose(const yarp::dev::Nav2D::Map2DLocation& loc) override;
+    bool   setInitialPose(const yarp::dev::Nav2D::Map2DLocation& loc, const yarp::sig::Matrix& cov) override;
+    bool   startLocalizationService() override;
+    bool   stopLocalizationService() override;
 
-    /**
-    * Gets the current position of the robot w.r.t world reference frame
-    * @param loc the location of the robot
-    * @return true/false
-    */
-    bool   getCurrentPosition(yarp::dev::Map2DLocation& loc) override;
-
-    /**
-    * Sets the initial pose for the localization algorithm which estimates the current position of the robot w.r.t world reference frame.
-    * @param loc the location of the robot
-    * @return true/false
-    */
-    bool   setInitialPose(yarp::dev::Map2DLocation& loc) override;
 };
 
 class amclLocalizerThread : public yarp::os::PeriodicThread
@@ -119,21 +93,21 @@ class amclLocalizerThread : public yarp::os::PeriodicThread
 protected:
     //general
     double                       m_last_statistics_printed;
-    yarp::dev::Map2DLocation     m_initial_loc;
-    yarp::dev::Map2DLocation     m_odometry_data;
-    yarp::os::Mutex              m_mutex;
+    yarp::dev::Nav2D::Map2DLocation     m_initial_loc;
+    yarp::dev::Nav2D::Map2DLocation     m_odometry_data;
+    std::mutex                   m_mutex;
     yarp::os::Searchable&        m_cfg;
     std::string                  m_local_name;
 
     //odometry port
     std::string                  m_port_broadcast_odometry_name;
-    yarp::os::BufferedPort<yarp::sig::Vector>  m_port_odometry_input;
+    yarp::os::BufferedPort<yarp::dev::OdometryData>  m_port_odometry_input;
     double                       m_last_odometry_data_received;
 
     //map interface 
     yarp::dev::PolyDriver        m_pMap;
-    yarp::dev::IMap2D*           m_iMap;
-    yarp::dev::MapGrid2D         m_yarp_map;
+    yarp::dev::Nav2D::IMap2D*    m_iMap;
+    yarp::dev::Nav2D::MapGrid2D  m_yarp_map;
 
     //laser client
     yarp::dev::PolyDriver                        m_pLas;
@@ -204,12 +178,12 @@ protected:
     map_t* m_amcl_map;
 
     //all the estimated particles
-    yarp::os::Mutex m_particle_poses_mutex;
-    std::vector<yarp::dev::Map2DLocation> m_particle_poses;
+    std::mutex m_particle_poses_mutex;
+    std::vector<yarp::dev::Nav2D::Map2DLocation> m_particle_poses;
 
     //the robot most probable position
-    yarp::os::Mutex m_localization_data_mutex;
-    yarp::dev::Map2DLocation     m_localization_data;
+    std::mutex m_localization_data_mutex;
+    yarp::dev::Nav2D::Map2DLocation     m_localization_data;
     yarp::sig::Matrix    m_initial_covariance_msg;
 public:
     amclLocalizerThread(double _period, yarp::os::Searchable& _cfg);
@@ -218,13 +192,14 @@ public:
     virtual void run() override;
 
 public:
-    bool initializeLocalization(yarp::dev::Map2DLocation& loc);
-    bool getCurrentLoc(yarp::dev::Map2DLocation& loc);
-    bool getPoses(std::vector<yarp::dev::Map2DLocation>& poses);
+    bool initializeLocalization(const yarp::dev::Nav2D::Map2DLocation& loc);
+    bool initializeLocalization(const yarp::dev::Nav2D::Map2DLocation& loc, const yarp::sig::Matrix& cov);
+    bool getCurrentLoc(yarp::dev::Nav2D::Map2DLocation& loc);
+    bool getPoses(std::vector<yarp::dev::Nav2D::Map2DLocation>& poses);
 
 private:
     static pf_vector_t uniformPoseGenerator(void* arg);
-    map_t* amclLocalizerThread::convertMap(yarp::dev::MapGrid2D& yarp_map);
+    map_t* convertMap(yarp::dev::Nav2D::MapGrid2D& yarp_map);
     void updateFilter();
     void applyInitialPose();
 };

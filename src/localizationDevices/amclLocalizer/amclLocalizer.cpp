@@ -1,27 +1,15 @@
 /*
- * Copyright (C)2018  ICub Facility - Istituto Italiano di Tecnologia
- * Author: Marco Randazzo
- * email:  marco.randazzo@iit.it
- * website: www.robotcub.org
- * Permission is granted to copy, distribute, and/or modify this program
- * under the terms of the GNU General Public License, version 2 or any
- * later version published by the Free Software Foundation.
- *
- * A copy of the license can be found at
- * http://www.robotcub.org/icub/license/gpl.txt
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
- * Public License for more details
- */
+•   Copyright (C) 2020 Istituto Italiano di Tecnologia (IIT)
+•   All rights reserved.
+•
+•   This software may be modified and distributed under the terms of the
+•   GPL-2+ license. See the accompanying LICENSE file for details.
+*/
 
 #include <yarp/os/Network.h>
 #include <yarp/os/RFModule.h>
 #include <yarp/os/Time.h>
 #include <yarp/os/Port.h>
-#include <yarp/os/Mutex.h>
-#include <yarp/os/LockGuard.h>
 #include <yarp/os/LogStream.h>
 #include <yarp/os/Node.h>
 #include <yarp/dev/PolyDriver.h>
@@ -35,6 +23,8 @@
 #include "amclLocalizer.h"
 
 using namespace yarp::os;
+using namespace yarp::dev;
+using namespace yarp::dev::Nav2D;
 using namespace amcl;
 
 #ifndef M_PI
@@ -82,28 +72,58 @@ bool amclLocalizerRPCHandler::respond(const yarp::os::Bottle& command, yarp::os:
 }
 
 
-bool   amclLocalizer::getLocalizationStatus(yarp::dev::LocalizationStatusEnum& status)
+bool   amclLocalizer::getLocalizationStatus(LocalizationStatusEnum& status)
 {
-    status = yarp::dev::LocalizationStatusEnum::localization_status_localized_ok;
+    status = LocalizationStatusEnum::localization_status_localized_ok;
     return true;
 }
 
-bool   amclLocalizer::getEstimatedPoses(std::vector<yarp::dev::Map2DLocation>& poses)
+bool    amclLocalizer::startLocalizationService()
+{
+    yError() << "Not yet implemented";
+    return false;
+}
+
+bool    amclLocalizer::stopLocalizationService()
+{
+    yError() << "Not yet implemented";
+    return false;
+}
+
+bool   amclLocalizer::getCurrentPosition(yarp::dev::Nav2D::Map2DLocation& loc, yarp::sig::Matrix& cov)
+{
+    yError() << "Not yet implemented";
+    return false;
+}
+
+bool   amclLocalizer::getEstimatedOdometry(yarp::dev::OdometryData& odom)
+{
+    yError() << "Not yet implemented";
+    return false;
+}
+
+bool   amclLocalizer::getEstimatedPoses(std::vector<Map2DLocation>& poses)
 {
     poses.clear();
     thread->getPoses(poses);
     return true;
 }
 
-bool   amclLocalizer::getCurrentPosition(yarp::dev::Map2DLocation& loc)
+bool   amclLocalizer::getCurrentPosition(Map2DLocation& loc)
 {
     thread->getCurrentLoc(loc);
     return true;
 }
 
-bool   amclLocalizer::setInitialPose(yarp::dev::Map2DLocation& loc)
+bool   amclLocalizer::setInitialPose(const Map2DLocation& loc)
 {
     thread->initializeLocalization(loc);
+    return true;
+}
+
+bool   amclLocalizer::setInitialPose(const yarp::dev::Nav2D::Map2DLocation& loc, const yarp::sig::Matrix& cov)
+{
+    thread->initializeLocalization(loc,cov);
     return true;
 }
 
@@ -315,7 +335,7 @@ void amclLocalizerThread::updateFilter()
             m_particle_poses.clear();
             for (int i = 0; i < set->sample_count; i++)
             {
-                yarp::dev::Map2DLocation ppose;
+                Map2DLocation ppose;
                 ppose.x = set->samples[i].pose.v[0];
                 ppose.y = set->samples[i].pose.v[1];
                 ppose.theta = set->samples[i].pose.v[2]*RAD2DEG; //@@@@@@@CHECKME
@@ -373,9 +393,9 @@ void amclLocalizerThread::updateFilter()
     }
 }
 
-bool amclLocalizerThread::getPoses(std::vector<yarp::dev::Map2DLocation>& poses)
+bool amclLocalizerThread::getPoses(std::vector<Map2DLocation>& poses)
 {
-    LockGuard lock(m_particle_poses_mutex);
+    std::lock_guard<std::mutex> lock(m_particle_poses_mutex);
     poses = m_particle_poses;
     return true;
 }
@@ -394,16 +414,16 @@ void amclLocalizerThread::run()
         m_last_statistics_printed = yarp::os::Time::now();
     }
 
-    LockGuard lock(m_mutex);
+    std::lock_guard<std::mutex> lock(m_mutex);
 
     //read odometry data
-    yarp::sig::Vector *loc = m_port_odometry_input.read(false);
-    if (loc)
+    yarp::dev::OdometryData* odom = m_port_odometry_input.read(false);
+    if (odom)
     {
         m_last_odometry_data_received = yarp::os::Time::now();
-        m_odometry_data.x = loc->data()[0];
-        m_odometry_data.y = loc->data()[1];
-        m_odometry_data.theta = loc->data()[2];
+        m_odometry_data.x = odom->odom_x;
+        m_odometry_data.y = odom->odom_y;
+        m_odometry_data.theta = odom->odom_theta;
     }
     if (current_time - m_last_odometry_data_received > 0.1)
     {
@@ -427,9 +447,43 @@ void amclLocalizerThread::run()
     updateFilter();
 }
 
-bool amclLocalizerThread::initializeLocalization(yarp::dev::Map2DLocation& loc)
+bool amclLocalizerThread::initializeLocalization(const Map2DLocation& loc, const yarp::sig::Matrix& cov)
 {
-    LockGuard lock(m_mutex);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_localization_data.map_id = loc.map_id;
+    m_localization_data.x = loc.x;
+    m_localization_data.y = loc.y;
+    m_localization_data.theta = loc.theta;
+
+    // Re-initialize the filter
+    pf_vector_t pf_init_pose_mean = pf_vector_zero();
+    pf_init_pose_mean.v[0] = loc.x;
+    pf_init_pose_mean.v[1] = loc.y;
+    pf_init_pose_mean.v[2] = loc.theta * DEG2RAD; //@@@@ check me
+    pf_matrix_t pf_init_pose_cov = pf_matrix_zero();
+
+    pf_init_pose_cov.m[0][0] = cov[0][0];
+    pf_init_pose_cov.m[0][1] = cov[0][1];
+    pf_init_pose_cov.m[1][0] = cov[1][0];
+    pf_init_pose_cov.m[1][1] = cov[1][1];
+    pf_init_pose_cov.m[2][2] = cov[2][2];
+
+    if (m_initial_pose_hyp)
+    {
+        delete m_initial_pose_hyp;
+        m_initial_pose_hyp = nullptr;
+    }
+    m_initial_pose_hyp = new amcl_hyp_t();
+    m_initial_pose_hyp->pf_pose_mean = pf_init_pose_mean;
+    m_initial_pose_hyp->pf_pose_cov = pf_init_pose_cov;
+
+    applyInitialPose();
+    return true;
+}
+
+bool amclLocalizerThread::initializeLocalization(const Map2DLocation& loc)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_localization_data.map_id = loc.map_id;
     m_localization_data.x = loc.x;
     m_localization_data.y = loc.y;
@@ -474,9 +528,10 @@ bool amclLocalizerThread::initializeLocalization(yarp::dev::Map2DLocation& loc)
     return true;
 }
 
-bool amclLocalizerThread::getCurrentLoc(yarp::dev::Map2DLocation& loc)
+
+bool amclLocalizerThread::getCurrentLoc(Map2DLocation& loc)
 {
-    LockGuard lock (m_localization_data_mutex);
+    std::lock_guard<std::mutex> lock (m_localization_data_mutex);
     loc = m_localization_data;
     return true;
 }
@@ -880,7 +935,7 @@ pf_vector_t amclLocalizerThread::uniformPoseGenerator(void* arg)
     return p;
 }
 
-map_t* amclLocalizerThread::convertMap(yarp::dev::MapGrid2D& yarp_map)
+map_t* amclLocalizerThread::convertMap(MapGrid2D& yarp_map)
 {
     map_t* map = map_alloc();
     yAssert(map);
@@ -903,7 +958,7 @@ map_t* amclLocalizerThread::convertMap(yarp::dev::MapGrid2D& yarp_map)
     {
         int i = y * map->size_x + x;
         double occupancy;
-        yarp::dev::MapGrid2D::XYCell cell(x,y);
+        Nav2D::XYCell cell(x,y);
 
         yarp_map.getOccupancyData(cell, occupancy);
 
