@@ -589,7 +589,7 @@ bool amclLocalizerThread::threadInit()
 
     //general group
     m_local_name = "amclLocalizer";
-    if (general_group.check("local_name")) { m_local_name = general_group.find("local_name").asString(); }
+    if (general_group.check("name")) { m_local_name = general_group.find("name").asString(); }
 
     //laser group
     if (laser_group.check("laser_broadcast_port") == false)
@@ -716,7 +716,7 @@ bool amclLocalizerThread::threadInit()
     //get the map from the map_server
     Property map_options;
     map_options.put("device", "map2DClient");
-    map_options.put("local", "/amclLocalizer"); //This is just a prefix. map2DClient will complete the port name.
+    map_options.put("local", "/" + m_local_name); //This is just a prefix. map2DClient will complete the port name.
     map_options.put("remote", "/mapServer");
     if (m_pMap.open(map_options) == false)
     {
@@ -815,7 +815,7 @@ bool amclLocalizerThread::threadInit()
     //opens the laser client and the corresponding interface
     Property options;
     options.put("device", "Rangefinder2DClient");
-    options.put("local", "/amclLocalizer/laser:i");
+    options.put("local", m_local_name + "/laser:i");
     options.put("remote", m_laser_remote_port);
     if (m_pLas.open(options) == false)
     {
@@ -1032,7 +1032,7 @@ bool amclLocalizer::open(yarp::os::Searchable& config)
     Bottle general_group = p.findGroup("GENERAL");
     if (general_group.isNull()==false)
     {
-        if (general_group.check("local_name")) { local_name = general_group.find("local_name").asString(); }
+        if (general_group.check("name")) { local_name = general_group.find("name").asString(); }
     }
     bool ret = rpcPort.open("/"+local_name+"/rpc");
     if (ret == false)
