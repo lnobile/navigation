@@ -190,18 +190,21 @@ void t265LocalizerThread::run()
     {
         m_current_device_data.x = -pose_data.translation.z;
         m_current_device_data.y = -pose_data.translation.x;
-        yarp::math::Quaternion q (pose_data.rotation.x, pose_data.rotation.y, pose_data.rotation.z, pose_data.rotation.w);
-    //    yDebug()<<"********************************";
-     //   yDebug() << "quat" << q.toString();
+       // yarp::math::Quaternion q (pose_data.rotation.x, pose_data.rotation.y, pose_data.rotation.z, pose_data.rotation.w);
+       yarp::math::Quaternion q (pose_data.rotation.x, pose_data.rotation.y, pose_data.rotation.z, pose_data.rotation.w);
+        yDebug()<<"********************************";
+        yDebug() << "quat" << q.toString();
         auto m = q.toRotationMatrix3x3();
-    //    yDebug() << "Mat" << m.toString();
+       yDebug() << "Mat" << m.toString();
    //     auto v = yarp::math::dcm2euler(m);
    //     yDebug() << "A1" << yarp::math::dcm2euler(m).toString() << v[0] *RAD2DEG  << v[1] *RAD2DEG << v[2] *RAD2DEG;
         auto v = yarp::math::dcm2rpy(m);
-     //   yDebug() << "A2" << v2.toString() << v2[0] *RAD2DEG  << v2[1] *RAD2DEG << v2[2] *RAD2DEG;
-        m_current_device_data.theta =  v[1]*RAD2DEG;
+        yDebug() << "A2" << v.toString() << v[0] *RAD2DEG  << v[1] *RAD2DEG << v[2] *RAD2DEG;
+        // m_current_device_data.theta =  v[1]*RAD2DEG; // no, give only rotation around y between -90 and +90
+       
+        m_current_device_data.theta = atan2(m(0,2),m(0,0))*RAD2DEG;
     }
-  //  yDebug() << "device pose (x y t) before relocation:" << m_current_device_data.x << m_current_device_data.y << m_current_device_data.theta;
+    yDebug() << "device pose (x y t) before relocation:" << m_current_device_data.x << m_current_device_data.y << m_current_device_data.theta;
 
     //relocate data in robot frame
     relocate_data(m_current_device_data);
