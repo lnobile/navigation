@@ -75,16 +75,14 @@ public:
 
         Network yarp;
 
-            Property params;
-            params.fromCommand(argc, argv);
 
-            if (!params.check("robot"))
+            if (!rf.check("robot"))
             {
                 fprintf(stderr, "Please specify the name of the robot\n");
                 fprintf(stderr, "--robot name (e.g. icub)\n");
                 return 1;
             }
-            std::string robotName=params.find("R1").asString();
+            std::string robotName=rf.find("R1").asString();
             std::string remotePorts="/";
             remotePorts+=robotName;
             remotePorts+="/head";
@@ -144,16 +142,6 @@ public:
                 printf(".");
             }
             printf("\n;");
-
-            command=encoders;
-            //now set the shoulder to some value
-            command[0]=-50;
-            command[1]=20;
-            command[2]=-10;
-            command[3]=50;
-            pos->positionMove(command.data());
-
-            bool done=false;
 
             command=encoders;
 
