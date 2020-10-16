@@ -650,7 +650,7 @@ bool extendedRangefinder2DWrapper::initialize_YARP(yarp::os::Searchable &params)
                 yError("extendedRangefinder2DWrapper: failed to open port %s", rpcPortName.c_str());
                 return false;
             }
-        //rpcPort.setReader(*this);
+       // rpcPort.setReader(*this);
 
         if (!rpcPortMod.open(rpcPortNameMod))
             {
